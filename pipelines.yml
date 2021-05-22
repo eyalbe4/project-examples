@@ -1,0 +1,56 @@
+resources:
+- name: eyalbe4_project_examples_gitResource
+  type: GitRepo
+  configuration:
+    path: eyalbe4/project-examples
+    gitProvider: github_eyalbe4_project_examples_integration
+    buildOn:
+      pullRequestCreate: true
+    branches:
+      include: master
+- name: eyalbe4_project_examples_buildInfoResource
+  type: BuildInfo
+  configuration:
+    sourceArtifactory: rt_eyalbe4_project_examples_integration
+    buildName: project-examples-master
+    buildNumber: $run_number
+pipelines:
+- name: eyalbe4_project_examples_pipeline
+  configuration:
+    environmentVariables:
+      readOnly:
+        CI: "true"
+        JFROG_CLI_BUILD_NAME: project-examples-master
+        JFROG_CLI_BUILD_NUMBER: $run_number
+        JFROG_CLI_BUILD_URL: $step_url
+  steps:
+  - name: MvnBuildStep
+    type: MvnBuild
+    configuration:
+      environmentVariables:
+        JFROG_BUILD_STATUS: PASS
+      integrations:
+      - name: rt_eyalbe4_project_examples_integration
+      inputResources:
+      - name: eyalbe4_project_examples_gitResource
+      mvnCommand: clean install
+      resolverSnapshotRepo: maven-virtual-1
+      resolverReleaseRepo: maven-virtual-1
+    execution:
+      onFailure:
+      - export JFROG_BUILD_STATUS=FAIL
+      - jfrog rt bce
+      - jfrog rt bp
+  - name: PublishBuildInfoStep
+    type: PublishBuildInfo
+    configuration:
+      inputResources:
+      - name: eyalbe4_project_examples_gitResource
+      outputResources:
+      - name: eyalbe4_project_examples_buildInfoResource
+      inputSteps:
+      - name: MvnBuildStep
+      forceXrayScan: true
+    execution:
+      onComplete:
+      - update_commit_status eyalbe4_project_examples_gitResource
